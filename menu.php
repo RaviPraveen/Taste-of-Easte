@@ -82,6 +82,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         delete_image($old->fetchColumn() ?: null);
         db()->prepare('DELETE FROM menu_items WHERE id = ?')->execute([$id]);
         flash('Item deleted.');
+    } elseif ($action === 'bulk_availability') {
+        $ids = array_values(array_filter(array_map('intval', (array) ($_POST['ids'] ?? []))));
+        $available = (int) ($_POST['available'] ?? 1) === 1 ? 1 : 0;
+        if ($ids) {
+            $ph = implode(',', array_fill(0, count($ids), '?'));
+            db()->prepare("UPDATE menu_items SET available = ? WHERE id IN ($ph)")
+                ->execute(array_merge([$available], $ids));
+            flash(count($ids) . ' item(s) marked ' . ($available ? 'available' : 'unavailable') . '.');
+        }
     } elseif ($action === 'bulk_delete') {
         $ids = array_values(array_filter(array_map('intval', (array) ($_POST['ids'] ?? []))));
         if ($ids) {
@@ -117,11 +126,21 @@ $stmt->execute($params);
 $items = $stmt->fetchAll();
 ?>
 <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
-  <div class="d-flex align-items-center gap-2">
-    <span class="text-muted small"><?= count($items) ?> item(s) &middot; Photos appear on the POS billing screen</span>
-    <button class="btn btn-sm btn-danger" id="bulkDeleteBtn" style="display:none" onclick="bulkDelete()">
-      <i class="bi bi-trash"></i> Delete selected (<span id="bulkCount">0</span>)
-    </button>
+  <div class="d-flex align-items-center flex-wrap gap-2">
+    <span class="text-muted small" id="bulkIdleText"><?= count($items) ?> item(s) &middot; Photos appear on the POS billing screen</span>
+    <div id="bulkBar" class="d-flex align-items-center flex-wrap gap-2" style="display:none!important">
+      <span class="badge text-bg-info"><span id="bulkCount">0</span> selected</span>
+      <button class="btn btn-sm btn-success" onclick="bulkAvailability(1)">
+        <i class="bi bi-check-circle"></i> Set Available
+      </button>
+      <button class="btn btn-sm btn-outline-secondary" onclick="bulkAvailability(0)">
+        <i class="bi bi-slash-circle"></i> Set Unavailable
+      </button>
+      <button class="btn btn-sm btn-danger" onclick="bulkDelete()">
+        <i class="bi bi-trash"></i> Delete
+      </button>
+      <button class="btn btn-sm btn-link text-muted text-decoration-none" onclick="clearSelection()">Clear</button>
+    </div>
   </div>
   <div class="d-flex gap-2">
     <form method="get">
@@ -241,27 +260,45 @@ $items = $stmt->fetchAll();
   </div>
 </div>
 <script>
+const selectedIds = () => [...document.querySelectorAll('.row-check:checked')].map((c) => c.value);
+
 function updateBulkBar() {
-  const checked = document.querySelectorAll('.row-check:checked');
-  document.getElementById('bulkDeleteBtn').style.display = checked.length ? '' : 'none';
-  document.getElementById('bulkCount').textContent = checked.length;
+  const count = selectedIds().length;
+  document.getElementById('bulkBar').style.setProperty('display', count ? 'flex' : 'none', 'important');
+  document.getElementById('bulkIdleText').style.display = count ? 'none' : '';
+  document.getElementById('bulkCount').textContent = count;
   const all = document.querySelectorAll('.row-check');
-  document.getElementById('checkAll').checked = all.length > 0 && checked.length === all.length;
+  const master = document.getElementById('checkAll');
+  master.checked = all.length > 0 && count === all.length;
+  master.indeterminate = count > 0 && count < all.length;
 }
 function toggleAll(master) {
   document.querySelectorAll('.row-check').forEach((c) => { c.checked = master.checked; });
   updateBulkBar();
 }
+function clearSelection() {
+  document.querySelectorAll('.row-check').forEach((c) => { c.checked = false; });
+  updateBulkBar();
+}
+function submitBulk(fields, ids) {
+  const f = document.createElement('form');
+  f.method = 'post';
+  f.innerHTML = Object.entries(fields)
+      .map(([k, v]) => '<input type="hidden" name="' + k + '" value="' + v + '">').join('')
+    + ids.map((id) => '<input type="hidden" name="ids[]" value="' + id + '">').join('');
+  document.body.appendChild(f);
+  f.submit();
+}
+function bulkAvailability(available) {
+  const ids = selectedIds();
+  if (!ids.length) return;
+  submitBulk({ action: 'bulk_availability', available: available }, ids);
+}
 function bulkDelete() {
-  const ids = [...document.querySelectorAll('.row-check:checked')].map((c) => c.value);
+  const ids = selectedIds();
   if (!ids.length) return;
   appConfirm('Delete ' + ids.length + ' selected item(s)?', () => {
-    const f = document.createElement('form');
-    f.method = 'post';
-    f.innerHTML = '<input type="hidden" name="action" value="bulk_delete">'
-      + ids.map((id) => '<input type="hidden" name="ids[]" value="' + id + '">').join('');
-    document.body.appendChild(f);
-    f.submit();
+    submitBulk({ action: 'bulk_delete' }, ids);
   });
 }
 let itemModal;
