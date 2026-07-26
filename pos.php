@@ -119,24 +119,16 @@ $currency = setting('currency', 'Rs.');
       </div>
       <div class="modal-body">
         <div class="text-center mb-3">
-          <div class="text-muted small">Amount due</div>
+          <div class="text-muted small">Final bill amount</div>
           <div class="display-6 fw-bold text-brand" id="payTotal"><?= e($currency) ?> 0.00</div>
         </div>
-        <div class="btn-group w-100 mb-3">
-          <input type="radio" class="btn-check" name="payMethod" id="pmCash" value="cash" checked onchange="payMethodChanged()">
+        <div class="btn-group w-100">
+          <input type="radio" class="btn-check" name="payMethod" id="pmCash" value="cash" checked>
           <label class="btn btn-outline-brand" for="pmCash"><i class="bi bi-cash"></i> Cash</label>
-          <input type="radio" class="btn-check" name="payMethod" id="pmCard" value="card" onchange="payMethodChanged()">
+          <input type="radio" class="btn-check" name="payMethod" id="pmCard" value="card">
           <label class="btn btn-outline-brand" for="pmCard"><i class="bi bi-credit-card"></i> Card</label>
         </div>
-        <div id="cashFields">
-          <label class="form-label small fw-semibold">Cash received</label>
-          <input type="number" id="paidAmount" class="form-control form-control-lg text-end mb-2" min="0" step="0.01" oninput="updateChange()">
-          <div class="d-flex flex-wrap gap-1 mb-2" id="quickCash"></div>
-          <div class="d-flex justify-content-between fw-bold">
-            <span>Change</span><span id="changeDue" class="text-success"><?= e($currency) ?> 0.00</span>
-          </div>
-        </div>
-        <div id="payError" class="alert alert-danger py-2 small mt-2" style="display:none;"></div>
+        <div id="payError" class="alert alert-danger py-2 small mt-3" style="display:none;"></div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -157,5 +149,5 @@ const MENU = <?= json_encode(array_map(fn ($i) => [
 const CURRENCY = <?= json_encode($currency) ?>;
 const SERVICE_PCT = <?= json_encode($servicePct) ?>;
 </script>
-<script src="assets/pos.js?v=4"></script>
+<script src="assets/pos.js?v=5"></script>
 <?php require_once __DIR__ . '/footer.php'; ?>

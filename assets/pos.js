@@ -102,46 +102,15 @@ let payModal;
 function openPay() {
   const t = totals();
   byId('payTotal').textContent = money(t.total);
-  byId('paidAmount').value = t.total.toFixed(2);
   byId('payError').style.display = 'none';
-  renderQuickCash(t.total);
-  updateChange();
   payModal = payModal || new bootstrap.Modal(byId('payModal'));
   payModal.show();
-}
-
-function renderQuickCash(total) {
-  const notes = [100, 500, 1000, 5000];
-  const opts = new Set([Math.ceil(total / 100) * 100]);
-  notes.forEach((n) => { if (n >= total) opts.add(n); });
-  byId('quickCash').innerHTML = [...opts].sort((a, b) => a - b).map((v) =>
-    `<button class="btn btn-sm btn-outline-secondary" onclick="byId('paidAmount').value=${v};updateChange()">${CURRENCY} ${v.toLocaleString()}</button>`
-  ).join('');
-}
-
-function payMethodChanged() {
-  const cash = byId('pmCash').checked;
-  byId('cashFields').style.display = cash ? '' : 'none';
-  if (!cash) byId('paidAmount').value = totals().total.toFixed(2);
-}
-
-function updateChange() {
-  const t = totals();
-  const paid = parseFloat(byId('paidAmount').value) || 0;
-  byId('changeDue').textContent = money(Math.max(0, paid - t.total));
 }
 
 async function submitOrder() {
   const t = totals();
   const method = byId('pmCash').checked ? 'cash' : 'card';
-  const paid = method === 'cash' ? (parseFloat(byId('paidAmount').value) || 0) : t.total;
   const errBox = byId('payError');
-
-  if (method === 'cash' && paid < t.total - 0.001) {
-    errBox.textContent = 'Cash received is less than the total.';
-    errBox.style.display = '';
-    return;
-  }
 
   const payload = {
     order_type: byId('orderType').value,
@@ -150,7 +119,6 @@ async function submitOrder() {
     discount: t.discount,
     service: byId('serviceChk').checked,
     payment_method: method,
-    paid: paid,
   };
 
   const btn = byId('confirmPayBtn');

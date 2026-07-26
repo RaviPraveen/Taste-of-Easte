@@ -20,7 +20,6 @@ $tableNo = $orderType === 'dine_in' ? trim((string) ($input['table_no'] ?? '')) 
 $method = ($input['payment_method'] ?? '') === 'card' ? 'card' : 'cash';
 $discount = max(0.0, (float) ($input['discount'] ?? 0));
 $useService = !empty($input['service']);
-$paid = max(0.0, (float) ($input['paid'] ?? 0));
 
 $pdo = db();
 try {
@@ -56,13 +55,9 @@ try {
     $discount = min($discount, $subtotal + $service);
     $total = round($subtotal + $service - $discount, 2);
 
-    if ($method === 'card') {
-        $paid = $total;
-    } elseif ($paid < $total) {
-        echo json_encode(['ok' => false, 'error' => 'Cash received is less than the total.']);
-        exit;
-    }
-    $change = round($paid - $total, 2);
+    // The bill total is the amount charged — no cash-received / change step.
+    $paid = $total;
+    $change = 0.0;
 
     // Takeaway: billed before the food is handed over, so it stays pending until
     // staff marks it completed. Dine-in: billed after the meal, so it's already done.

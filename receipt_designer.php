@@ -2,6 +2,9 @@
 require_once __DIR__ . '/config.php';
 require_admin();
 
+const LOGO_DIR = __DIR__ . '/assets/uploads';
+const LOGO_URL = 'assets/uploads';
+
 $toggles = ['rc_show_logo', 'rc_show_address', 'rc_show_phone', 'rc_show_cashier',
             'rc_show_type', 'rc_show_unit', 'rc_show_change', 'rc_bold_total'];
 
@@ -12,6 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'rc_tagline' => trim($_POST['rc_tagline'] ?? ''),
         'rc_divider' => in_array($_POST['rc_divider'] ?? '', ['dashed', 'solid', 'double'], true) ? $_POST['rc_divider'] : 'dashed',
         'rc_logo_size' => (string) max(20, min(100, (int) ($_POST['rc_logo_size'] ?? 55))),
+        'hotel_name'     => trim($_POST['hotel_name'] ?? '') ?: setting('hotel_name'),
         'address'        => trim($_POST['address'] ?? ''),
         'phone'          => trim($_POST['phone'] ?? ''),
         'receipt_footer' => trim($_POST['receipt_footer'] ?? ''),
@@ -19,6 +23,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     foreach ($toggles as $t) {
         $save[$t] = isset($_POST[$t]) ? '1' : '0';
     }
+
+    // Same logo as Settings — one image used on bills, sidebar and login.
+    $oldLogo = setting('logo_img', '');
+    if (isset($_POST['remove_logo_img'])) {
+        if ($oldLogo && is_file(__DIR__ . '/' . $oldLogo)) {
+            @unlink(__DIR__ . '/' . $oldLogo);
+        }
+        $save['logo_img'] = '';
+    } elseif (!empty($_FILES['logo_img']['name']) && $_FILES['logo_img']['error'] === UPLOAD_ERR_OK) {
+        $ext = strtolower(pathinfo($_FILES['logo_img']['name'], PATHINFO_EXTENSION));
+        if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true)) {
+            flash('Logo must be a JPG, PNG, WEBP or GIF image.', 'danger');
+            header('Location: receipt_designer.php');
+            exit;
+        }
+        if ($_FILES['logo_img']['size'] > 2 * 1024 * 1024) {
+            flash('Logo image must be under 2 MB.', 'danger');
+            header('Location: receipt_designer.php');
+            exit;
+        }
+        if (!is_dir(LOGO_DIR)) {
+            mkdir(LOGO_DIR, 0777, true);
+        }
+        $file = 'logo_' . time() . '.' . $ext;
+        if (move_uploaded_file($_FILES['logo_img']['tmp_name'], LOGO_DIR . '/' . $file)) {
+            if ($oldLogo && is_file(__DIR__ . '/' . $oldLogo)) {
+                @unlink(__DIR__ . '/' . $oldLogo);
+            }
+            $save['logo_img'] = LOGO_URL . '/' . $file;
+        }
+    }
+
     $stmt = db()->prepare('INSERT INTO settings (name, value) VALUES (?,?) ON DUPLICATE KEY UPDATE value = VALUES(value)');
     foreach ($save as $k => $v) {
         $stmt->execute([$k, $v]);
@@ -42,15 +78,38 @@ $logoImg = setting('logo_img', '');
 $on = fn (string $k) => setting($k, '1') === '1';
 $sampleDate = date('Y-m-d h:i A');
 ?>
-<div class="text-muted small mb-3">Hotel name and logo come from <a href="settings.php">Settings</a> — here you design how the printed bill looks.</div>
+<div class="text-muted small mb-3">Hotel name and logo are shared with <a href="settings.php">Settings</a> — changing them here updates them everywhere (sidebar, login and bills).</div>
 <div class="row g-3">
   <!-- Controls -->
   <div class="col-lg-5">
-    <form method="post" id="designerForm">
+    <form method="post" id="designerForm" enctype="multipart/form-data">
       <div class="card border-0 shadow-sm mb-3">
         <div class="card-header"><i class="bi bi-shop me-1"></i> Bill Details</div>
         <div class="card-body">
           <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label small fw-medium">Hotel name</label>
+              <input type="text" class="form-control form-control-sm" name="hotel_name" id="dName" value="<?= e(setting('hotel_name')) ?>" required>
+            </div>
+            <div class="col-12">
+              <label class="form-label small fw-medium">Hotel logo <span class="text-muted fw-normal">(PNG / JPG, max 2 MB)</span></label>
+              <div class="d-flex align-items-center gap-2 mb-2">
+                <?php if ($logoImg): ?>
+                  <img src="<?= e($logoImg) ?>" class="thumb" alt="Current logo">
+                  <span class="small text-muted">Current logo</span>
+                <?php else: ?>
+                  <span class="thumb-ph"><i class="bi bi-shop text-muted"></i></span>
+                  <span class="small text-muted">No logo uploaded</span>
+                <?php endif; ?>
+              </div>
+              <input type="file" class="form-control form-control-sm" name="logo_img" id="dLogoFile" accept=".jpg,.jpeg,.png,.webp,.gif">
+              <?php if ($logoImg): ?>
+              <div class="form-check mt-2">
+                <input class="form-check-input" type="checkbox" name="remove_logo_img" id="dRemoveLogo">
+                <label class="form-check-label small" for="dRemoveLogo">Remove logo</label>
+              </div>
+              <?php endif; ?>
+            </div>
             <div class="col-12">
               <label class="form-label small fw-medium">Address</label>
               <input type="text" class="form-control form-control-sm" name="address" id="dAddress" value="<?= e(setting('address')) ?>">
@@ -114,7 +173,7 @@ $sampleDate = date('Y-m-d h:i A');
                 'rc_show_cashier' => 'Cashier name',
                 'rc_show_type'    => 'Order type / table',
                 'rc_show_unit'    => 'Unit prices',
-                'rc_show_change'  => 'Paid & change rows',
+                'rc_show_change'  => 'Payment method row',
                 'rc_bold_total'   => 'Large bold total',
             ];
             foreach ($labels as $key => $label): ?>
@@ -148,7 +207,7 @@ $sampleDate = date('Y-m-d h:i A');
           <div class="center" id="pvLogoWrap" style="<?= $logoImg ? '' : 'display:none;' ?>">
             <img id="pvLogoImg" src="<?= e($logoImg) ?>" alt="" style="max-width:<?= (int) setting('rc_logo_size', '55') ?>%;">
           </div>
-          <div class="center bold" style="font-size:1.25em;"><?= e(setting('hotel_name')) ?></div>
+          <div class="center bold" id="pvName" style="font-size:1.25em;"><?= e(setting('hotel_name')) ?></div>
           <div class="center" id="pvTagline" style="<?= $rc['tagline'] === '' ? 'display:none' : '' ?>"><?= e($rc['tagline']) ?></div>
           <div class="center" id="pvAddress"><?= e(setting('address')) ?></div>
           <div class="center" id="pvPhone">Tel: <?= e(setting('phone')) ?></div>
@@ -171,8 +230,7 @@ $sampleDate = date('Y-m-d h:i A');
             <tr><td>Subtotal</td><td class="r"><?= e(setting('currency')) ?> 1,290.00</td></tr>
             <tr><td>Service charge</td><td class="r"><?= e(setting('currency')) ?> 129.00</td></tr>
             <tr id="pvTotal" class="bold" style="font-size:1.15em;"><td>TOTAL</td><td class="r"><?= e(setting('currency')) ?> 1,419.00</td></tr>
-            <tr class="pv-change"><td>Paid (Cash)</td><td class="r"><?= e(setting('currency')) ?> 1,500.00</td></tr>
-            <tr class="pv-change"><td>Change</td><td class="r"><?= e(setting('currency')) ?> 81.00</td></tr>
+            <tr class="pv-change"><td>Paid by</td><td class="r">Cash</td></tr>
           </table>
           <div class="hr"></div>
           <div class="center" id="pvFooter"><?= e(setting('receipt_footer')) ?></div>
@@ -195,13 +253,23 @@ function updatePreview() {
   if ($('dDivider').value === 'solid') pv.classList.add('div-solid');
   if ($('dDivider').value === 'double') pv.classList.add('div-double');
 
+  $('pvName').textContent = $('dName').value || 'Hotel Name';
   $('pvAddress').textContent = $('dAddress').value;
   $('pvPhone').textContent = 'Tel: ' + $('dPhone').value;
   $('pvTagline').textContent = $('dTagline').value;
   $('pvTagline').style.display = $('dTagline').value ? '' : 'none';
   $('pvFooter').textContent = $('dFooter').value;
 
-  $('pvLogoWrap').style.display = ($('t_rc_show_logo').checked && HAS_LOGO_IMG) ? '' : 'none';
+  // Logo preview reflects a newly picked file or the "remove" checkbox instantly.
+  let hasLogo = HAS_LOGO_IMG;
+  const removeChk = $('dRemoveLogo');
+  const fileInput = $('dLogoFile');
+  if (removeChk && removeChk.checked) hasLogo = false;
+  if (fileInput.files && fileInput.files[0]) {
+    $('pvLogoImg').src = URL.createObjectURL(fileInput.files[0]);
+    hasLogo = true;
+  }
+  $('pvLogoWrap').style.display = ($('t_rc_show_logo').checked && hasLogo) ? '' : 'none';
   $('pvLogoImg').style.maxWidth = $('dLogoSize').value + '%';
   $('dLogoSizeVal').textContent = $('dLogoSize').value;
   const show = (id, key) => { $(id).style.display = $('t_' + key).checked ? '' : 'none'; };

@@ -94,8 +94,7 @@ $tagline = setting('rc_tagline', '');
     <?php endif; ?>
     <tr class="bold" <?= $on('rc_bold_total') ? 'style="font-size:1.15em;"' : '' ?>><td>TOTAL</td><td class="r"><?= rs($order['total']) ?></td></tr>
     <?php if ($on('rc_show_change')): ?>
-    <tr><td>Paid (<?= e(ucfirst($order['payment_method'])) ?>)</td><td class="r"><?= rs($order['paid']) ?></td></tr>
-    <tr><td>Change</td><td class="r"><?= rs($order['change_due']) ?></td></tr>
+    <tr><td>Paid by</td><td class="r"><?= e(ucfirst($order['payment_method'])) ?></td></tr>
     <?php endif; ?>
   </table>
   <div class="hr"></div>
