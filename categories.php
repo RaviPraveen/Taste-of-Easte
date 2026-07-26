@@ -60,7 +60,7 @@ $categories = db()->query(
               </td>
               <td class="text-center"><span class="badge text-bg-light border"><?= (int) $c['item_count'] ?></span></td>
               <td class="text-end">
-                <form method="post" class="d-inline" onsubmit="return confirm('Delete this category?')">
+                <form method="post" class="d-inline" onsubmit="return confirmSubmit(this, 'Delete the category <?= e($c['name']) ?>?')">
                   <input type="hidden" name="action" value="delete">
                   <input type="hidden" name="id" value="<?= (int) $c['id'] ?>">
                   <button class="btn btn-sm btn-outline-danger" <?= $c['item_count'] > 0 ? 'disabled' : '' ?>><i class="bi bi-trash"></i></button>

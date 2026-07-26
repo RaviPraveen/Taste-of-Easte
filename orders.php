@@ -74,7 +74,7 @@ $dayTotal = array_sum(array_map(
                 <button class="btn btn-sm btn-success btn-pulse" onclick="setStatus(<?= (int) $o['id'] ?>,'completed')" title="Mark completed"><i class="bi bi-check2"></i> Complete</button>
               <?php endif; ?>
               <?php if ($o['status'] !== 'cancelled'): ?>
-                <button class="btn btn-sm btn-outline-danger" onclick="if(confirm('Cancel this order? It will be excluded from sales.'))setStatus(<?= (int) $o['id'] ?>,'cancelled')" title="Cancel"><i class="bi bi-x-lg"></i></button>
+                <button class="btn btn-sm btn-outline-danger" onclick="appConfirm('Cancel order <?= e($o['order_no']) ?>? It will be excluded from sales.', () => setStatus(<?= (int) $o['id'] ?>,'cancelled'), 'Yes, cancel')" title="Cancel"><i class="bi bi-x-lg"></i></button>
               <?php endif; ?>
             </td>
           </tr>

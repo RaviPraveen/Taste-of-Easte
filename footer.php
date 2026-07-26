@@ -1,6 +1,27 @@
   </main>
 </div>
 </div>
+
+<!-- App-styled confirmation modal (replaces the browser's native confirm popup) -->
+<div class="modal fade" id="appConfirmModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:400px">
+    <div class="modal-content">
+      <div class="modal-body text-center pt-4">
+        <div class="mx-auto mb-3 d-flex align-items-center justify-content-center"
+             style="width:52px;height:52px;border-radius:14px;background:var(--danger-soft);color:var(--danger);font-size:1.4rem">
+          <i class="bi bi-exclamation-triangle"></i>
+        </div>
+        <div id="appConfirmMsg" class="fw-medium mb-1">Are you sure?</div>
+        <div class="text-muted small">This action cannot be undone.</div>
+      </div>
+      <div class="modal-footer border-0 justify-content-center pb-4 pt-2">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger" id="appConfirmOk">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 function toggleSidebar() {
@@ -10,6 +31,27 @@ function toggleSidebar() {
 function toggleCollapse() {
   const collapsed = document.body.classList.toggle('sb-collapsed');
   localStorage.setItem('sbCollapsed', collapsed ? '1' : '0');
+}
+// In-app confirmation dialog. Usage: appConfirm('Delete this?', () => { ... }, 'Delete')
+let _confirmCb = null;
+let _confirmModal = null;
+function appConfirm(message, onConfirm, okLabel) {
+  document.getElementById('appConfirmMsg').textContent = message;
+  document.getElementById('appConfirmOk').textContent = okLabel || 'Delete';
+  _confirmCb = onConfirm;
+  _confirmModal = _confirmModal || new bootstrap.Modal(document.getElementById('appConfirmModal'));
+  _confirmModal.show();
+}
+document.getElementById('appConfirmOk').addEventListener('click', () => {
+  _confirmModal.hide();
+  if (_confirmCb) _confirmCb();
+  _confirmCb = null;
+});
+// For <form onsubmit="return confirmSubmit(this, 'message')"> — shows the styled
+// modal, and submits the form only when the user confirms.
+function confirmSubmit(form, message, okLabel) {
+  appConfirm(message, () => form.submit(), okLabel);
+  return false;
 }
 // Toast notifications
 document.querySelectorAll('.toast').forEach((el) => new bootstrap.Toast(el, { delay: 3500 }).show());

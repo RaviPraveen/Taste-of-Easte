@@ -82,6 +82,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         delete_image($old->fetchColumn() ?: null);
         db()->prepare('DELETE FROM menu_items WHERE id = ?')->execute([$id]);
         flash('Item deleted.');
+    } elseif ($action === 'bulk_delete') {
+        $ids = array_values(array_filter(array_map('intval', (array) ($_POST['ids'] ?? []))));
+        if ($ids) {
+            $ph = implode(',', array_fill(0, count($ids), '?'));
+            $imgs = db()->prepare("SELECT image FROM menu_items WHERE id IN ($ph)");
+            $imgs->execute($ids);
+            foreach ($imgs->fetchAll(PDO::FETCH_COLUMN) as $img) {
+                delete_image($img ?: null);
+            }
+            db()->prepare("DELETE FROM menu_items WHERE id IN ($ph)")->execute($ids);
+            flash(count($ids) . ' item(s) deleted.');
+        }
     }
     header('Location: menu.php' . (isset($_GET['cat']) ? '?cat=' . (int) $_GET['cat'] : ''));
     exit;
@@ -105,7 +117,12 @@ $stmt->execute($params);
 $items = $stmt->fetchAll();
 ?>
 <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
-  <div class="text-muted small"><?= count($items) ?> item(s) &middot; Photos appear on the POS billing screen</div>
+  <div class="d-flex align-items-center gap-2">
+    <span class="text-muted small"><?= count($items) ?> item(s) &middot; Photos appear on the POS billing screen</span>
+    <button class="btn btn-sm btn-danger" id="bulkDeleteBtn" style="display:none" onclick="bulkDelete()">
+      <i class="bi bi-trash"></i> Delete selected (<span id="bulkCount">0</span>)
+    </button>
+  </div>
   <div class="d-flex gap-2">
     <form method="get">
       <select name="cat" class="form-select form-select-sm" onchange="this.form.submit()">
@@ -124,14 +141,18 @@ $items = $stmt->fetchAll();
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0">
         <thead class="table-light">
-          <tr><th style="width:70px">Photo</th><th>Item</th><th>Category</th><th class="text-end">Price</th><th class="text-center">Available</th><th class="text-end">Actions</th></tr>
+          <tr>
+            <th style="width:40px"><input type="checkbox" class="form-check-input" id="checkAll" onclick="toggleAll(this)" aria-label="Select all items"></th>
+            <th style="width:70px">Photo</th><th>Item</th><th>Category</th><th class="text-end">Price</th><th class="text-center">Available</th><th class="text-end">Actions</th>
+          </tr>
         </thead>
         <tbody>
         <?php if (!$items): ?>
-          <tr><td colspan="6" class="text-center text-muted py-4">No items yet.</td></tr>
+          <tr><td colspan="7" class="text-center text-muted py-4">No items yet.</td></tr>
         <?php endif; ?>
         <?php foreach ($items as $it): ?>
           <tr class="<?= $it['available'] ? '' : 'table-secondary opacity-75' ?>">
+            <td><input type="checkbox" class="form-check-input row-check" value="<?= (int) $it['id'] ?>" onchange="updateBulkBar()" aria-label="Select <?= e($it['name']) ?>"></td>
             <td>
               <?php if ($it['image']): ?>
                 <img src="<?= e($it['image']) ?>" class="thumb" alt="">
@@ -158,16 +179,16 @@ $items = $stmt->fetchAll();
                 <i class="bi bi-pencil"></i>
               </button>
               <?php if ($it['image']): ?>
-              <form method="post" class="d-inline" onsubmit="return confirm('Remove this photo?')">
+              <form method="post" class="d-inline" onsubmit="return confirmSubmit(this, 'Remove the photo of <?= e($it['name']) ?>?', 'Remove')">
                 <input type="hidden" name="action" value="remove_image">
                 <input type="hidden" name="id" value="<?= (int) $it['id'] ?>">
                 <button class="btn btn-sm btn-outline-warning" title="Remove photo"><i class="bi bi-image"></i></button>
               </form>
               <?php endif; ?>
-              <form method="post" class="d-inline" onsubmit="return confirm('Delete this item?')">
+              <form method="post" class="d-inline" onsubmit="return confirmSubmit(this, 'Delete <?= e($it['name']) ?>?')">
                 <input type="hidden" name="action" value="delete">
                 <input type="hidden" name="id" value="<?= (int) $it['id'] ?>">
-                <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                <button class="btn btn-sm btn-outline-danger" title="Delete"><i class="bi bi-trash"></i></button>
               </form>
             </td>
           </tr>
@@ -220,6 +241,29 @@ $items = $stmt->fetchAll();
   </div>
 </div>
 <script>
+function updateBulkBar() {
+  const checked = document.querySelectorAll('.row-check:checked');
+  document.getElementById('bulkDeleteBtn').style.display = checked.length ? '' : 'none';
+  document.getElementById('bulkCount').textContent = checked.length;
+  const all = document.querySelectorAll('.row-check');
+  document.getElementById('checkAll').checked = all.length > 0 && checked.length === all.length;
+}
+function toggleAll(master) {
+  document.querySelectorAll('.row-check').forEach((c) => { c.checked = master.checked; });
+  updateBulkBar();
+}
+function bulkDelete() {
+  const ids = [...document.querySelectorAll('.row-check:checked')].map((c) => c.value);
+  if (!ids.length) return;
+  appConfirm('Delete ' + ids.length + ' selected item(s)?', () => {
+    const f = document.createElement('form');
+    f.method = 'post';
+    f.innerHTML = '<input type="hidden" name="action" value="bulk_delete">'
+      + ids.map((id) => '<input type="hidden" name="ids[]" value="' + id + '">').join('');
+    document.body.appendChild(f);
+    f.submit();
+  });
+}
 let itemModal;
 function openItem(it) {
   document.getElementById('itemModalTitle').textContent = it ? 'Edit Item' : 'Add Item';
